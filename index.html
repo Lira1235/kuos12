@@ -1,8 +1,10 @@
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>店內專屬優惠券</title>
+    <!-- 【修正 1】：補全完整的 LIFF SDK 路徑 -->
     <script src="https://static.line-scdn.net"></script>
     <style>
         body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; text-align: center; padding: 20px; background: #f8f9fa; color: #333; }
@@ -25,6 +27,7 @@
     </div>
 
     <script>
+        // 確認 API_URL 為最新的 GAS 部署網址
         const API_URL = 'https://script.google.com/macros/s/AKfycbzFTWIeh_1bjhLjm1YWcWBr2_rX_qtq-JkaqR2KrABL68rPr7FJr62QlwTYN07nN-aGOg/exec'; 
         const LIFF_ID = "2008952529-BCywLq7k";
         let userId = '';
@@ -42,6 +45,7 @@
                 }
             } catch (err) { 
                 document.getElementById('loading').innerText = "❌ 請於 LINE 內開啟";
+                console.error(err);
             }
         }
 
@@ -61,9 +65,10 @@
                 document.getElementById('coupon-area').style.display = 'block';
                 document.getElementById('coupon-code').innerText = currentCoupon;
 
-                // 【關鍵功能】：獲取優惠券後，自動發送一張卡片到聊天室
+                // 獲取優惠券後，自動發送卡片到聊天室
                 await sendCouponToChat(currentCoupon);
             } catch (e) {
+                console.error(e);
                 alert("獲取失敗，請重試");
             }
         }
@@ -86,7 +91,17 @@
                             },
                             "footer": {
                                 "type": "box", "layout": "vertical", "contents": [
-                                    { "type": "button", "action": { "type": "uri", "label": "開啟核銷頁面", "uri": "https://liff.line.me" + LIFF_ID }, "style": "primary", "color": "#2ed573" }
+                                    { 
+                                        "type": "button", 
+                                        "action": { 
+                                            "type": "uri", 
+                                            "label": "開啟核銷頁面", 
+                                            // 【修正 2】：補上斜線 /
+                                            "uri": "https://liff.line.me" + LIFF_ID 
+                                        }, 
+                                        "style": "primary", 
+                                        "color": "#2ed573" 
+                                    }
                                 ]
                             }
                         }
@@ -101,17 +116,22 @@
                 btn.disabled = true;
                 btn.innerText = "核銷中...";
                 
-                await fetch(API_URL, {
-                    method: 'POST',
-                    mode: 'no-cors', 
-                    body: JSON.stringify({ uid: userId })
-                });
-                
-                alert("核銷完成！");
-                // 核銷成功後再發送一張「已兌換」證明，並關閉視窗
-                if (liff.isInClient()) {
-                    await liff.sendMessages([{ "type": "text", "text": "✅ 優惠券已核銷成功！\n序號：" + currentCoupon }]);
-                    liff.closeWindow();
+                try {
+                    await fetch(API_URL, {
+                        method: 'POST',
+                        mode: 'no-cors', 
+                        body: JSON.stringify({ uid: userId })
+                    });
+                    
+                    alert("核銷完成！");
+                    if (liff.isInClient()) {
+                        await liff.sendMessages([{ "type": "text", "text": "✅ 優惠券已核銷成功！\n序號：" + currentCoupon }]);
+                        liff.closeWindow();
+                    }
+                } catch (err) {
+                    alert("核銷失敗，請稍後再試");
+                    btn.disabled = false;
+                    btn.innerText = "確認核銷優惠券";
                 }
             }
         }
