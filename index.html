@@ -1,10 +1,9 @@
-<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>店內專屬優惠券</title>
-    <!-- 修正：必須包含完整路徑，否則 LIFF 無法運作 -->
+    <!-- 【修正點 1】：SDK 必須是完整路徑 -->
     <script src="https://static.line-scdn.net"></script>
     <style>
         body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; text-align: center; padding: 20px; background: #f8f9fa; color: #333; }
@@ -49,7 +48,7 @@
                 }
             } catch (err) { 
                 console.error("LIFF 初始化失敗", err);
-                document.getElementById('loading').innerText = "❌ 無法載入 LINE 資訊，請於 LINE App 內開啟";
+                document.getElementById('loading').innerText = "❌ 請於 LINE App 內開啟";
             }
         }
 
@@ -77,14 +76,14 @@
                     // 使用 POST 更新 Google Sheets 狀態
                     await fetch(API_URL, {
                         method: 'POST',
-                        mode: 'no-cors', // 配合 Google Apps Script 的特殊安全性
+                        mode: 'no-cors', 
                         body: JSON.stringify({ uid: userId })
                     });
                     
                     alert("核銷完成！");
                     await sendVerifySuccessMessage();
                 } catch (err) {
-                    alert("網路異常，核銷未成功，請重試。");
+                    alert("網路異常，請聯繫店員。");
                     btn.disabled = false;
                     btn.innerText = "確認核銷優惠券";
                 }
@@ -94,19 +93,34 @@
         async function sendVerifySuccessMessage() {
             if (liff.isInClient()) {
                 try {
-                    // 在聊天室發送核銷存證
+                    // 【修正點 2】：發送漂亮的核銷紀錄回聊天室
                     await liff.sendMessages([{
-                        "type": "text",
-                        "text": "✅ 優惠券兌換成功！\n序號：" + currentCoupon + "\n期待您下次光臨。"
+                        "type": "flex",
+                        "altText": "優惠券核銷成功",
+                        "contents": {
+                          "type": "bubble",
+                          "body": {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                              { "type": "text", "text": "✅ 兌換成功", "weight": "bold", "color": "#2ed573", "size": "sm" },
+                              { "type": "text", "text": "店內專屬優惠券", "weight": "bold", "size": "xl", "margin": "md" },
+                              { "type": "separator", "margin": "md" },
+                              { "type": "box", "layout": "vertical", "margin": "md", "contents": [
+                                  { "type": "text", "text": "核銷序號", "size": "xs", "color": "#aaaaaa" },
+                                  { "type": "text", "text": currentCoupon, "size": "lg", "weight": "bold" }
+                                ]}
+                            ]
+                          }
+                        }
                     }]);
                 } catch (e) { 
-                    console.log("用戶可能未授權發送訊息權限"); 
+                    console.log("發送訊息失敗，可能是授權不足"); 
                 }
-                liff.closeWindow(); // 自動關閉 LIFF 視窗回到聊天室
+                liff.closeWindow(); 
             }
         }
 
-        // 啟動程序
         initLIFF();
     </script>
 </body>
