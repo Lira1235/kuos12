@@ -3,6 +3,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>店內專屬優惠券</title>
+    <!-- 引入 LINE SDK -->
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         body { font-family: 'PingFang TC', sans-serif; text-align: center; padding: 40px 20px; background: #f8f9fa; }
@@ -20,12 +21,14 @@
 </head>
 <body>
     <div class="container">
-        <div id="get-ui">
+        <!-- 領取 UI -->
+        <div id="get-ui" style="display:none;">
             <h2>✨ 今日限定優惠</h2>
             <p>點擊下方按鈕領取專屬優惠券<br>領取後將發送至您的聊天室</p>
             <button id="get-btn" class="btn" onclick="handleGetCoupon()">立即領取優惠</button>
         </div>
 
+        <!-- 核銷 UI -->
         <div id="verify-ui" style="display:none;">
             <h2>🎫 優惠券核銷</h2>
             <div class="code-display" id="coupon-code">------</div>
@@ -33,7 +36,7 @@
             <button id="verify-btn" class="btn" onclick="handleVerify()">確認核銷優惠券</button>
         </div>
 
-        <div id="loading-text">正在處理中...</div>
+        <div id="loading-text" style="display:block;">✨ 正在讀取資訊...</div>
     </div>
 
     <script>
@@ -61,10 +64,18 @@
             try {
                 const res = await fetch(`${API_URL}?uid=${userId}`);
                 const data = await res.json();
+                document.getElementById('loading-text').style.display = 'none';
+
+                // 如果有未核銷的券，顯示核銷頁面；否則顯示領券頁面
                 if (data.code && data.status === "未核銷") {
                     showVerifyUI(data.code);
+                } else {
+                    document.getElementById('get-ui').style.display = 'block';
                 }
-            } catch (e) { console.log("歡迎新用戶"); }
+            } catch (e) { 
+                document.getElementById('loading-text').style.display = 'none';
+                document.getElementById('get-ui').style.display = 'block';
+            }
         }
 
         function showVerifyUI(code) {
@@ -76,9 +87,8 @@
 
         async function handleGetCoupon() {
             const btn = document.getElementById('get-btn');
-            const loader = document.getElementById('loading-text');
             btn.disabled = true;
-            loader.style.display = 'block';
+            btn.innerText = "領取中...";
 
             try {
                 const res = await fetch(`${API_URL}?uid=${userId}`);
@@ -89,17 +99,18 @@
                 alert("優惠券已發送至您的聊天室！");
                 liff.closeWindow();
             } catch (e) {
-                alert("領取失敗，請稍後再試");
+                alert("領取失敗，請重試");
                 btn.disabled = false;
-            } finally {
-                loader.style.display = 'none';
+                btn.innerText = "立即領取優惠";
             }
         }
 
         async function handleVerify() {
             if (confirm("確認由店員核銷此券？")) {
-                document.getElementById('verify-btn').disabled = true;
-                // 使用 POST 方式更新 GAS
+                const btn = document.getElementById('verify-btn');
+                btn.disabled = true;
+                btn.innerText = "核銷中...";
+                
                 await fetch(API_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ uid: userId }) });
                 alert("核銷完成！期待下次光臨");
                 if (liff.isInClient()) {
@@ -129,8 +140,7 @@
                         }
                     }]);
                 } catch (e) { 
-                    alert("請先於 LINE 授權傳送訊息權限");
-                    console.error(e);
+                    alert("請先於 LINE 授權「傳送訊息」權限");
                 }
             }
         }
