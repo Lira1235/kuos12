@@ -1,35 +1,42 @@
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>店內專屬優惠券</title>
+    <!-- 修正後的完整 SDK 連結 -->
     <script src="https://static.line-scdn.net"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f4; }
-        .coupon-card { background: white; padding: 30px; border-radius: 15px; border: 2px dashed #ff4757; }
-        .code { font-size: 2em; color: #ff4757; font-weight: bold; margin: 20px 0; }
-        button { background: #2ed573; color: white; border: none; padding: 15px 30px; border-radius: 5px; font-size: 1.1em; cursor: pointer; }
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; text-align: center; padding: 20px; background: #f8f9fa; }
+        .coupon-card { background: white; padding: 30px; border-radius: 15px; border: 3px dashed #ff4757; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .code { font-size: 2.5em; color: #ff4757; font-weight: bold; margin: 20px 0; letter-spacing: 2px; }
+        button { background: #2ed573; color: white; border: none; padding: 18px 35px; border-radius: 50px; font-size: 1.2em; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; }
+        button:active { background: #26af5f; transform: scale(0.98); }
         button:disabled { background: #ccc; }
+        .hint { color: #777; font-size: 0.9em; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="coupon-card">
-        <h2>您的優惠序號</h2>
-        <div id="loading">載入中...</div>
+        <h2>專屬優惠序號</h2>
+        <div id="loading">讀取優惠資訊中...</div>
         <div id="coupon-area" style="display:none;">
             <div class="code" id="coupon-code">------</div>
-            <p>請出示此畫面給店員核銷</p>
-            <button id="verify-btn" onclick="handleVerify()">店員核銷按鈕</button>
+            <p>結帳時請由<strong>店員點擊</strong>下方按鈕</p>
+            <button id="verify-btn" onclick="handleVerify()">確認核銷優惠券</button>
+            <p class="hint">※ 核銷後本券即失效</p>
         </div>
     </div>
 
     <script>
         const API_URL = 'https://script.google.com/macros/s/AKfycbz1nJt3dXCvIo8tTHzsrpbaVtTmkrTX80am9-zLb9K6Hz4tPINW-V3A7UOYZkBZle5suw/exec'; 
+        const LIFF_ID = "2008952529-BCywLq7k";
         let userId = '';
+        let currentCoupon = '';
 
         async function initLIFF() {
             try {
-                await liff.init({ liffId: "https://liff.line.me/2008952529-BCywLq7k" });
+                await liff.init({ liffId: LIFF_ID });
                 if (!liff.isLoggedIn()) {
                     liff.login();
                 } else {
@@ -37,29 +44,60 @@
                     userId = profile.userId;
                     getCoupon();
                 }
-            } catch (err) { console.error(err); }
+            } catch (err) { 
+                console.error("LIFF 初始化失敗", err);
+                document.getElementById('loading').innerText = "連線失敗，請稍後再試";
+            }
         }
 
         async function getCoupon() {
-            const res = await fetch(`${API_URL}?uid=${userId}`);
-            const data = await res.json();
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('coupon-area').style.display = 'block';
-            document.getElementById('coupon-code').innerText = data.code;
+            try {
+                const res = await fetch(`${API_URL}?uid=${userId}`);
+                const data = await res.json();
+                currentCoupon = data.code;
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('coupon-area').style.display = 'block';
+                document.getElementById('coupon-code').innerText = currentCoupon;
+            } catch (e) {
+                alert("無法取得序號，請檢查網路連線");
+            }
         }
 
         async function handleVerify() {
-            const pwd = prompt("店員專用：請輸入核銷密碼");
-            if (pwd === "1234") { // 簡易密碼設定
-                document.getElementById('verify-btn').disabled = true;
-                await fetch(API_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ uid: userId })
-                });
-                alert("核銷成功！");
-                location.reload();
-            } else if (pwd !== null) {
-                alert("密碼錯誤");
+            // 移除密碼驗證，改為簡單確認
+            if (confirm("確認核銷此優惠券嗎？")) {
+                const btn = document.getElementById('verify-btn');
+                btn.disabled = true;
+                btn.innerText = "處理中...";
+                
+                try {
+                    // 發送核銷請求至 GAS
+                    await fetch(API_URL, {
+                        method: 'POST',
+                        mode: 'no-cors', 
+                        body: JSON.stringify({ uid: userId })
+                    });
+                    
+                    alert("核銷成功！");
+                    sendVerifySuccessMessage();
+                } catch (err) {
+                    alert("核銷失敗，請聯繫店員");
+                    btn.disabled = false;
+                    btn.innerText = "確認核銷優惠券";
+                }
+            }
+        }
+
+        async function sendVerifySuccessMessage() {
+            if (liff.isInClient()) {
+                try {
+                    await liff.sendMessages([{
+                        "type": "text",
+                        "text": "✅ 我已成功兌換優惠券\n序號：" + currentCoupon + "\n期待下次光臨！"
+                    }]);
+                } catch (e) { console.log("訊息發送取消"); }
+                liff.closeWindow();
             }
         }
 
