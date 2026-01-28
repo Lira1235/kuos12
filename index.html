@@ -1,30 +1,32 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>店內專屬優惠券</title>
-    <!-- 修正後的完整 SDK 連結 -->
+    <!-- 修正：必須包含完整路徑，否則 LIFF 無法運作 -->
     <script src="https://static.line-scdn.net"></script>
     <style>
-        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; text-align: center; padding: 20px; background: #f8f9fa; }
-        .coupon-card { background: white; padding: 30px; border-radius: 15px; border: 3px dashed #ff4757; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .code { font-size: 2.5em; color: #ff4757; font-weight: bold; margin: 20px 0; letter-spacing: 2px; }
-        button { background: #2ed573; color: white; border: none; padding: 18px 35px; border-radius: 50px; font-size: 1.2em; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; }
+        body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; text-align: center; padding: 20px; background: #f8f9fa; color: #333; }
+        .coupon-card { background: white; padding: 30px; border-radius: 20px; border: 3px dashed #ff4757; box-shadow: 0 8px 20px rgba(0,0,0,0.05); max-width: 400px; margin: 0 auto; }
+        h2 { margin-top: 0; color: #444; }
+        .code { font-size: 2.8em; color: #ff4757; font-weight: bold; margin: 20px 0; letter-spacing: 2px; font-family: monospace; }
+        button { background: #2ed573; color: white; border: none; padding: 18px 35px; border-radius: 50px; font-size: 1.2em; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; box-shadow: 0 4px 10px rgba(46, 213, 115, 0.3); }
         button:active { background: #26af5f; transform: scale(0.98); }
-        button:disabled { background: #ccc; }
-        .hint { color: #777; font-size: 0.9em; margin-top: 15px; }
+        button:disabled { background: #ccc; box-shadow: none; }
+        .hint { color: #888; font-size: 0.9em; margin-top: 15px; line-height: 1.5; }
+        #loading { padding: 50px 0; color: #666; }
     </style>
 </head>
 <body>
     <div class="coupon-card">
         <h2>專屬優惠序號</h2>
-        <div id="loading">讀取優惠資訊中...</div>
+        <div id="loading">✨ 正在讀取優惠資訊...</div>
         <div id="coupon-area" style="display:none;">
             <div class="code" id="coupon-code">------</div>
             <p>結帳時請由<strong>店員點擊</strong>下方按鈕</p>
             <button id="verify-btn" onclick="handleVerify()">確認核銷優惠券</button>
-            <p class="hint">※ 核銷後本券即失效</p>
+            <p class="hint">※ 核銷後本券即失效<br>下次消費可再次領取新券</p>
         </div>
     </div>
 
@@ -36,6 +38,7 @@
 
         async function initLIFF() {
             try {
+                // 初始化 LIFF
                 await liff.init({ liffId: LIFF_ID });
                 if (!liff.isLoggedIn()) {
                     liff.login();
@@ -46,7 +49,7 @@
                 }
             } catch (err) { 
                 console.error("LIFF 初始化失敗", err);
-                document.getElementById('loading').innerText = "連線失敗，請稍後再試";
+                document.getElementById('loading').innerText = "❌ 無法載入 LINE 資訊，請於 LINE App 內開啟";
             }
         }
 
@@ -60,29 +63,28 @@
                 document.getElementById('coupon-area').style.display = 'block';
                 document.getElementById('coupon-code').innerText = currentCoupon;
             } catch (e) {
-                alert("無法取得序號，請檢查網路連線");
+                alert("無法連線至資料庫，請檢查網路。");
             }
         }
 
         async function handleVerify() {
-            // 移除密碼驗證，改為簡單確認
-            if (confirm("確認核銷此優惠券嗎？")) {
+            if (confirm("確認核銷此優惠券嗎？\n(此動作將使序號失效)")) {
                 const btn = document.getElementById('verify-btn');
                 btn.disabled = true;
-                btn.innerText = "處理中...";
+                btn.innerText = "核銷處理中...";
                 
                 try {
-                    // 發送核銷請求至 GAS
+                    // 使用 POST 更新 Google Sheets 狀態
                     await fetch(API_URL, {
                         method: 'POST',
-                        mode: 'no-cors', 
+                        mode: 'no-cors', // 配合 Google Apps Script 的特殊安全性
                         body: JSON.stringify({ uid: userId })
                     });
                     
-                    alert("核銷成功！");
-                    sendVerifySuccessMessage();
+                    alert("核銷完成！");
+                    await sendVerifySuccessMessage();
                 } catch (err) {
-                    alert("核銷失敗，請聯繫店員");
+                    alert("網路異常，核銷未成功，請重試。");
                     btn.disabled = false;
                     btn.innerText = "確認核銷優惠券";
                 }
@@ -92,15 +94,19 @@
         async function sendVerifySuccessMessage() {
             if (liff.isInClient()) {
                 try {
+                    // 在聊天室發送核銷存證
                     await liff.sendMessages([{
                         "type": "text",
-                        "text": "✅ 我已成功兌換優惠券\n序號：" + currentCoupon + "\n期待下次光臨！"
+                        "text": "✅ 優惠券兌換成功！\n序號：" + currentCoupon + "\n期待您下次光臨。"
                     }]);
-                } catch (e) { console.log("訊息發送取消"); }
-                liff.closeWindow();
+                } catch (e) { 
+                    console.log("用戶可能未授權發送訊息權限"); 
+                }
+                liff.closeWindow(); // 自動關閉 LIFF 視窗回到聊天室
             }
         }
 
+        // 啟動程序
         initLIFF();
     </script>
 </body>
