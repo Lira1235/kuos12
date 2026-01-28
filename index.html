@@ -20,14 +20,12 @@
 </head>
 <body>
     <div class="container">
-        <!-- 領取介面 -->
         <div id="get-ui">
             <h2>✨ 今日限定優惠</h2>
             <p>點擊下方按鈕領取專屬優惠券<br>領取後將發送至您的聊天室</p>
             <button id="get-btn" class="btn" onclick="handleGetCoupon()">立即領取優惠</button>
         </div>
 
-        <!-- 核銷介面 (預設隱藏) -->
         <div id="verify-ui" style="display:none;">
             <h2>🎫 優惠券核銷</h2>
             <div class="code-display" id="coupon-code">------</div>
@@ -39,7 +37,6 @@
     </div>
 
     <script>
-        // 【修正 1】：請務必填入完整的 GAS 網址
         const API_URL = 'https://script.google.com/macros/s/AKfycbz3c2IdEfOj0qX4psE16pLMfptqHnwlppk8GWKj3-ZuZparWKlDeWZeDbdxL857S4ATcg/exec'; 
         const LIFF_ID = "2008952529-BCywLq7k";
         let userId = '';
@@ -53,14 +50,13 @@
                 } else {
                     const profile = await liff.getProfile();
                     userId = profile.userId;
-                    checkUserStatus(); // 判斷是要「領券」還是「核銷」
+                    checkUserStatus(); 
                 }
             } catch (err) {
-                alert("請在 LINE App 內開啟此頁面");
+                console.error(err);
             }
         }
 
-        // 判斷狀態：若已有未核銷序號，直接顯示核銷介面
         async function checkUserStatus() {
             try {
                 const res = await fetch(`${API_URL}?uid=${userId}`);
@@ -68,7 +64,7 @@
                 if (data.code && data.status === "未核銷") {
                     showVerifyUI(data.code);
                 }
-            } catch (e) { console.log("新用戶或已核銷"); }
+            } catch (e) { console.log("歡迎新用戶"); }
         }
 
         function showVerifyUI(code) {
@@ -78,7 +74,6 @@
             document.getElementById('coupon-code').innerText = code;
         }
 
-        // 領取邏輯
         async function handleGetCoupon() {
             const btn = document.getElementById('get-btn');
             const loader = document.getElementById('loading-text');
@@ -94,15 +89,17 @@
                 alert("優惠券已發送至您的聊天室！");
                 liff.closeWindow();
             } catch (e) {
-                alert("領取失敗，請重試");
+                alert("領取失敗，請稍後再試");
                 btn.disabled = false;
+            } finally {
+                loader.style.display = 'none';
             }
         }
 
-        // 核銷邏輯
         async function handleVerify() {
             if (confirm("確認由店員核銷此券？")) {
                 document.getElementById('verify-btn').disabled = true;
+                // 使用 POST 方式更新 GAS
                 await fetch(API_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ uid: userId }) });
                 alert("核銷完成！期待下次光臨");
                 if (liff.isInClient()) {
@@ -131,11 +128,15 @@
                             ]}
                         }
                     }]);
-                } catch (e) { alert("請先授權傳送訊息權限"); }
+                } catch (e) { 
+                    alert("請先於 LINE 授權傳送訊息權限");
+                    console.error(e);
+                }
             }
         }
 
         initLIFF();
     </script>
 </body>
+</html>
 </html>
