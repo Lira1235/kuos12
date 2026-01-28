@@ -3,41 +3,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>店內專屬優惠券</title>
-    <!-- 【修正點 1】：SDK 必須是完整路徑 -->
-    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="https://static.line-scdn.net"></script>
     <style>
         body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; text-align: center; padding: 20px; background: #f8f9fa; color: #333; }
         .coupon-card { background: white; padding: 30px; border-radius: 20px; border: 3px dashed #ff4757; box-shadow: 0 8px 20px rgba(0,0,0,0.05); max-width: 400px; margin: 0 auto; }
-        h2 { margin-top: 0; color: #444; }
         .code { font-size: 2.8em; color: #ff4757; font-weight: bold; margin: 20px 0; letter-spacing: 2px; font-family: monospace; }
-        button { background: #2ed573; color: white; border: none; padding: 18px 35px; border-radius: 50px; font-size: 1.2em; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; box-shadow: 0 4px 10px rgba(46, 213, 115, 0.3); }
-        button:active { background: #26af5f; transform: scale(0.98); }
-        button:disabled { background: #ccc; box-shadow: none; }
-        .hint { color: #888; font-size: 0.9em; margin-top: 15px; line-height: 1.5; }
+        button { background: #2ed573; color: white; border: none; padding: 18px 35px; border-radius: 50px; font-size: 1.2em; font-weight: bold; cursor: pointer; width: 100%; box-shadow: 0 4px 10px rgba(46, 213, 115, 0.3); }
+        button:disabled { background: #ccc; }
         #loading { padding: 50px 0; color: #666; }
     </style>
 </head>
 <body>
     <div class="coupon-card">
         <h2>專屬優惠序號</h2>
-        <div id="loading">✨ 正在讀取優惠資訊...</div>
+        <div id="loading">✨ 正在獲取您的優惠...</div>
         <div id="coupon-area" style="display:none;">
             <div class="code" id="coupon-code">------</div>
             <p>結帳時請由<strong>店員點擊</strong>下方按鈕</p>
             <button id="verify-btn" onclick="handleVerify()">確認核銷優惠券</button>
-            <p class="hint">※ 核銷後本券即失效</p>
         </div>
     </div>
 
     <script>
-        const API_URL = 'https://script.google.com/macros/s/AKfycbz1nJt3dXCvIo8tTHzsrpbaVtTmkrTX80am9-zLb9K6Hz4tPINW-V3A7UOYZkBZle5suw/exec'; 
+        const API_URL = 'https://script.google.com'; 
         const LIFF_ID = "2008952529-BCywLq7k";
         let userId = '';
         let currentCoupon = '';
 
         async function initLIFF() {
             try {
-                // 初始化 LIFF
                 await liff.init({ liffId: LIFF_ID });
                 if (!liff.isLoggedIn()) {
                     liff.login();
@@ -47,8 +41,7 @@
                     getCoupon();
                 }
             } catch (err) { 
-                console.error("LIFF 初始化失敗", err);
-                document.getElementById('loading').innerText = "❌ 請於 LINE App 內開啟";
+                document.getElementById('loading').innerText = "❌ 請於 LINE 內開啟";
             }
         }
 
@@ -56,68 +49,70 @@
             try {
                 const res = await fetch(`${API_URL}?uid=${userId}`);
                 const data = await res.json();
-                currentCoupon = data.code;
                 
+                if (data.error) {
+                    alert(data.error);
+                    document.getElementById('loading').innerText = data.error;
+                    return;
+                }
+
+                currentCoupon = data.code;
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('coupon-area').style.display = 'block';
                 document.getElementById('coupon-code').innerText = currentCoupon;
+
+                // 【關鍵功能】：獲取優惠券後，自動發送一張卡片到聊天室
+                await sendCouponToChat(currentCoupon);
             } catch (e) {
-                alert("無法連線至資料庫，請檢查網路。");
+                alert("獲取失敗，請重試");
+            }
+        }
+
+        async function sendCouponToChat(code) {
+            if (liff.isInClient()) {
+                try {
+                    await liff.sendMessages([{
+                        "type": "flex",
+                        "altText": "您有一張新的優惠券！",
+                        "contents": {
+                            "type": "bubble",
+                            "body": {
+                                "type": "box", "layout": "vertical", "contents": [
+                                    { "type": "text", "text": "🎁 領取成功", "weight": "bold", "color": "#ff4757", "size": "sm" },
+                                    { "type": "text", "text": "店內專屬優惠券", "weight": "bold", "size": "xl", "margin": "md" },
+                                    { "type": "text", "text": "序號：" + code, "size": "md", "margin": "sm", "weight": "bold" },
+                                    { "type": "text", "text": "請保留此訊息，結帳時出示。", "size": "xs", "color": "#888888", "margin": "md" }
+                                ]
+                            },
+                            "footer": {
+                                "type": "box", "layout": "vertical", "contents": [
+                                    { "type": "button", "action": { "type": "uri", "label": "開啟核銷頁面", "uri": "https://liff.line.me" + LIFF_ID }, "style": "primary", "color": "#2ed573" }
+                                ]
+                            }
+                        }
+                    }]);
+                } catch (e) { console.log("自動發送失敗，可能未授權"); }
             }
         }
 
         async function handleVerify() {
-            if (confirm("確認核銷此優惠券嗎？\n(此動作將使序號失效)")) {
+            if (confirm("確認由店員核銷此券？")) {
                 const btn = document.getElementById('verify-btn');
                 btn.disabled = true;
-                btn.innerText = "核銷處理中...";
+                btn.innerText = "核銷中...";
                 
-                try {
-                    // 使用 POST 更新 Google Sheets 狀態
-                    await fetch(API_URL, {
-                        method: 'POST',
-                        mode: 'no-cors', 
-                        body: JSON.stringify({ uid: userId })
-                    });
-                    
-                    alert("核銷完成！");
-                    await sendVerifySuccessMessage();
-                } catch (err) {
-                    alert("網路異常，請聯繫店員。");
-                    btn.disabled = false;
-                    btn.innerText = "確認核銷優惠券";
+                await fetch(API_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', 
+                    body: JSON.stringify({ uid: userId })
+                });
+                
+                alert("核銷完成！");
+                // 核銷成功後再發送一張「已兌換」證明，並關閉視窗
+                if (liff.isInClient()) {
+                    await liff.sendMessages([{ "type": "text", "text": "✅ 優惠券已核銷成功！\n序號：" + currentCoupon }]);
+                    liff.closeWindow();
                 }
-            }
-        }
-
-        async function sendVerifySuccessMessage() {
-            if (liff.isInClient()) {
-                try {
-                    // 【修正點 2】：發送漂亮的核銷紀錄回聊天室
-                    await liff.sendMessages([{
-                        "type": "flex",
-                        "altText": "優惠券核銷成功",
-                        "contents": {
-                          "type": "bubble",
-                          "body": {
-                            "type": "box",
-                            "layout": "vertical",
-                            "contents": [
-                              { "type": "text", "text": "✅ 兌換成功", "weight": "bold", "color": "#2ed573", "size": "sm" },
-                              { "type": "text", "text": "店內專屬優惠券", "weight": "bold", "size": "xl", "margin": "md" },
-                              { "type": "separator", "margin": "md" },
-                              { "type": "box", "layout": "vertical", "margin": "md", "contents": [
-                                  { "type": "text", "text": "核銷序號", "size": "xs", "color": "#aaaaaa" },
-                                  { "type": "text", "text": currentCoupon, "size": "lg", "weight": "bold" }
-                                ]}
-                            ]
-                          }
-                        }
-                    }]);
-                } catch (e) { 
-                    console.log("發送訊息失敗，可能是授權不足"); 
-                }
-                liff.closeWindow(); 
             }
         }
 
