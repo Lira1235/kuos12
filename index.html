@@ -1,37 +1,50 @@
-<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>店內專屬優惠券</title>
-    <!-- 【修正 1】：補全完整的 LIFF SDK 路徑 -->
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-     <style>
+    <style>
         body { font-family: 'PingFang TC', sans-serif; text-align: center; padding: 40px 20px; background: #f8f9fa; }
         .container { background: white; padding: 40px 30px; border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.05); max-width: 400px; margin: 0 auto; }
         h2 { color: #333; margin-bottom: 10px; }
         p { color: #666; margin-bottom: 30px; line-height: 1.6; }
-        #get-btn { background: #ff4757; color: white; border: none; padding: 18px 35px; border-radius: 50px; font-size: 1.3em; font-weight: bold; cursor: pointer; width: 100%; transition: 0.3s; box-shadow: 0 4px 15px rgba(255, 71, 87, 0.3); }
-        #get-btn:active { transform: scale(0.95); background: #ff6b81; }
-        #get-btn:disabled { background: #ccc; box-shadow: none; }
+        .btn { border: none; padding: 18px 35px; border-radius: 50px; font-size: 1.3em; font-weight: bold; cursor: pointer; width: 100%; transition: 0.3s; }
+        #get-btn { background: #ff4757; color: white; box-shadow: 0 4px 15px rgba(255, 71, 87, 0.3); }
+        #verify-btn { background: #2ed573; color: white; box-shadow: 0 4px 15px rgba(46, 213, 115, 0.3); }
+        .btn:active { transform: scale(0.95); }
+        .btn:disabled { background: #ccc !important; box-shadow: none !important; }
         #loading-text { display: none; color: #ff4757; font-weight: bold; margin-top: 20px; }
+        .code-display { font-size: 2.2em; color: #ff4757; font-weight: bold; margin: 20px 0; font-family: monospace; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>✨ 今日限定優惠</h2>
-        <p>點擊下方按鈕領取專屬優惠券<br>領取後將發送至您的聊天室</p>
-        
-        <button id="get-btn" onclick="handleGetCoupon()">立即領取優惠</button>
-        <div id="loading-text">正在為您準備優惠券...</div>
+        <!-- 領取介面 -->
+        <div id="get-ui">
+            <h2>✨ 今日限定優惠</h2>
+            <p>點擊下方按鈕領取專屬優惠券<br>領取後將發送至您的聊天室</p>
+            <button id="get-btn" class="btn" onclick="handleGetCoupon()">立即領取優惠</button>
+        </div>
+
+        <!-- 核銷介面 (預設隱藏) -->
+        <div id="verify-ui" style="display:none;">
+            <h2>🎫 優惠券核銷</h2>
+            <div class="code-display" id="coupon-code">------</div>
+            <p>結帳時請由<strong>店員點擊</strong>下方按鈕</p>
+            <button id="verify-btn" class="btn" onclick="handleVerify()">確認核銷優惠券</button>
+        </div>
+
+        <div id="loading-text">正在處理中...</div>
     </div>
 
     <script>
-        const API_URL = 'https://script.google.com'; 
+        // 【修正 1】：請務必填入完整的 GAS 網址
+        const API_URL = 'https://script.google.com/macros/s/AKfycbxwc4xydiYwENYh6Gjz6Mff8t-rQbMiZUCbacPJ4qg0Z5JZpUBA12D30S0bW-VvsKZfMw/exec'; 
         const LIFF_ID = "2008952529-BCywLq7k";
         let userId = '';
+        let currentCoupon = '';
 
-        // 初始化 LIFF
         async function initLIFF() {
             try {
                 await liff.init({ liffId: LIFF_ID });
@@ -40,51 +53,65 @@
                 } else {
                     const profile = await liff.getProfile();
                     userId = profile.userId;
+                    checkUserStatus(); // 判斷是要「領券」還是「核銷」
                 }
             } catch (err) {
                 alert("請在 LINE App 內開啟此頁面");
             }
         }
 
-        // 點擊「領取優惠」按鈕
+        // 判斷狀態：若已有未核銷序號，直接顯示核銷介面
+        async function checkUserStatus() {
+            try {
+                const res = await fetch(`${API_URL}?uid=${userId}`);
+                const data = await res.json();
+                if (data.code && data.status === "未核銷") {
+                    showVerifyUI(data.code);
+                }
+            } catch (e) { console.log("新用戶或已核銷"); }
+        }
+
+        function showVerifyUI(code) {
+            currentCoupon = code;
+            document.getElementById('get-ui').style.display = 'none';
+            document.getElementById('verify-ui').style.display = 'block';
+            document.getElementById('coupon-code').innerText = code;
+        }
+
+        // 領取邏輯
         async function handleGetCoupon() {
             const btn = document.getElementById('get-btn');
             const loader = document.getElementById('loading-text');
-
             btn.disabled = true;
-            btn.style.display = 'none';
             loader.style.display = 'block';
 
             try {
-                // 1. 向 GAS 獲取序號 (自動從序號池抓取)
                 const res = await fetch(`${API_URL}?uid=${userId}`);
                 const data = await res.json();
+                if (data.error) { alert(data.error); return; }
 
-                if (data.error) {
-                    alert(data.error);
-                    loader.innerText = data.error;
-                    return;
-                }
-
-                const couponCode = data.code;
-
-                // 2. 於聊天室彈出 Flex Message
-                await sendFlexCoupon(couponCode);
-
-                // 3. 發送完成後自動關閉視窗
-                setTimeout(() => {
-                    liff.closeWindow();
-                }, 500);
-
+                await sendFlexCoupon(data.code);
+                alert("優惠券已發送至您的聊天室！");
+                liff.closeWindow();
             } catch (e) {
-                alert("領取失敗，請稍後再試");
+                alert("領取失敗，請重試");
                 btn.disabled = false;
-                btn.style.display = 'block';
-                loader.style.display = 'none';
             }
         }
 
-        // 發送 Flex Message 函式
+        // 核銷邏輯
+        async function handleVerify() {
+            if (confirm("確認由店員核銷此券？")) {
+                document.getElementById('verify-btn').disabled = true;
+                await fetch(API_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ uid: userId }) });
+                alert("核銷完成！期待下次光臨");
+                if (liff.isInClient()) {
+                    await liff.sendMessages([{ "type": "text", "text": "✅ 優惠券已成功核銷！\n序號：" + currentCoupon }]);
+                    liff.closeWindow();
+                }
+            }
+        }
+
         async function sendFlexCoupon(code) {
             if (liff.isInClient()) {
                 try {
@@ -96,22 +123,15 @@
                             "header": { "type": "box", "layout": "vertical", "contents": [{ "type": "text", "text": "LIMITED OFFER", "color": "#ffffff", "size": "xs", "weight": "bold" }], "backgroundColor": "#ff4757" },
                             "body": { "type": "box", "layout": "vertical", "contents": [
                                 { "type": "text", "text": "店內專屬優惠券", "weight": "bold", "size": "xl" },
-                                { "type": "box", "layout": "vertical", "margin": "lg", "spacing": "sm", "contents": [
-                                    { "type": "box", "layout": "baseline", "spacing": "sm", "contents": [
-                                        { "type": "text", "text": "序號", "color": "#aaaaaa", "size": "sm", "flex": 1 },
-                                        { "type": "text", "text": code, "wrap": true, "color": "#333333", "size": "md", "flex": 4, "weight": "bold" }
-                                    ]}
-                                ]},
-                                { "type": "text", "text": "請保留此訊息，結帳時點擊下方按鈕核銷", "size": "xxs", "color": "#aaaaaa", "margin": "md" }
+                                { "type": "text", "text": "序號：" + code, "size": "md", "margin": "md", "weight": "bold" },
+                                { "type": "text", "text": "結帳時請點擊下方按鈕進行核銷", "size": "xxs", "color": "#aaaaaa", "margin": "md" }
                             ]},
                             "footer": { "type": "box", "layout": "vertical", "contents": [
-                                { "type": "button", "action": { "type": "uri", "label": "立即核銷 (店員點擊)", "uri": "https://liff.line.me" + LIFF_ID }, "style": "primary", "color": "#2ed573" }
+                                { "type": "button", "action": { "type": "uri", "label": "立即核銷 (店員操作)", "uri": "https://liff.line.me" + LIFF_ID }, "style": "primary", "color": "#2ed573" }
                             ]}
                         }
                     }]);
-                } catch (e) {
-                    console.error("發送失敗，請確認 Scopes 權限已開啟");
-                }
+                } catch (e) { alert("請先授權傳送訊息權限"); }
             }
         }
 
