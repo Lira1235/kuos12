@@ -4,7 +4,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>店內專屬優惠券</title>
     <!-- 【修正點 1】：SDK 必須是完整路徑 -->
-    <script src="https://static.line-scdn.net"></script>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         body { font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif; text-align: center; padding: 20px; background: #f8f9fa; color: #333; }
         .coupon-card { background: white; padding: 30px; border-radius: 20px; border: 3px dashed #ff4757; box-shadow: 0 8px 20px rgba(0,0,0,0.05); max-width: 400px; margin: 0 auto; }
@@ -25,7 +25,7 @@
             <div class="code" id="coupon-code">------</div>
             <p>結帳時請由<strong>店員點擊</strong>下方按鈕</p>
             <button id="verify-btn" onclick="handleVerify()">確認核銷優惠券</button>
-            <p class="hint">※ 核銷後本券即失效<br>下次消費可再次領取新券</p>
+            <p class="hint">※ 核銷後本券即失效</p>
         </div>
     </div>
 
